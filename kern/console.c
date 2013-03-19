@@ -162,10 +162,18 @@ cga_init(void)
 static void
 cga_putc(int c)
 {
-	// if no attribute given, then use black on white
 	if (!(c & ~0xFF))
-		c |= 0x0700;
-
+	{	
+		
+		if(c >= 65 && c <= 90)
+			c |= ((7 << 12) + (2 << 8));
+		else if(c >= 97 && c <= 122)
+			c |= ((7 << 12) + (6 << 8));
+		else
+			c |= ((7 << 12) + (4 << 8));
+		
+	}
+	
 	switch (c & 0xff) {
 	case '\b':
 		if (crt_pos > 0) {
