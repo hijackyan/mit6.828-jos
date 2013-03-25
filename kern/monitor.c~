@@ -1,0 +1,283 @@
+// Simple command-line kernel monitor useful for
+// controlling the kernel and exploring the system interactively.
+
+#include <inc/stdio.h>
+#include <inc/string.h>
+#include <inc/memlayout.h>
+#include <inc/assert.h>
+#include <inc/x86.h>
+
+#include <kern/console.h>
+#include <kern/monitor.h>
+#include <kern/kdebug.h>
+#include <kern/pmap.h>
+
+#define CMDBUF_SIZE	80	// enough for one VGA text line
+
+
+struct Command {
+	const char *name;
+	const char *desc;
+	// return -1 to force monitor to exit
+	int (*func)(int argc, char** argv, struct Trapframe* tf);
+};
+
+static struct Command commands[] = {
+	{ "help", "Display this list of commands", mon_help },
+	{ "kerninfo", "Display information about the kernel", mon_kerninfo },
+	{ "backtrace", "Display backtrace", mon_backtrace },
+	{ "showmappings", "Display the mapping", mon_showmappings },
+	{ "mon_setmappings", "Set the mapping", mon_setmappings },
+	{ "dump", "Dump the address", mon_dump },
+	{ "checkpermission", "Check the permission", mon_checkpermission },
+};
+#define NCOMMANDS (sizeof(commands)/sizeof(commands[0]))
+
+/***** Implementations of basic kernel monitor commands *****/
+
+int
+mon_help(int argc, char **argv, struct Trapframe *tf)
+{
+	int i;
+
+	for (i = 0; i < NCOMMANDS; i++)
+		cprintf("%s - %s\n", commands[i].name, commands[i].desc);
+	return 0;
+}
+
+int
+mon_kerninfo(int argc, char **argv, struct Trapframe *tf)
+{
+	extern char _start[], entry[], etext[], edata[], end[];
+
+	cprintf("Special kernel symbols:\n");
+	cprintf("  _start                  %08x (phys)\n", _start);
+	cprintf("  entry  %08x (virt)  %08x (phys)\n", entry, entry - KERNBASE);
+	cprintf("  etext  %08x (virt)  %08x (phys)\n", etext, etext - KERNBASE);
+	cprintf("  edata  %08x (virt)  %08x (phys)\n", edata, edata - KERNBASE);
+	cprintf("  end    %08x (virt)  %08x (phys)\n", end, end - KERNBASE);
+	cprintf("Kernel executable memory footprint: %dKB\n",
+		ROUNDUP(end - entry, 1024) / 1024);
+	return 0;
+}
+
+
+int
+mon_backtrace(int argc, char **argv, struct Trapframe *tf)
+{
+
+	uint32_t *ebp, *eip, arg[5], i;
+	struct Eipdebuginfo info;
+	//the arg numebr is 5 because there are only 0X14 byte for them in the stack
+	ebp = (uint32_t*) read_ebp();
+	eip = (uint32_t*) ebp[1];
+	for(i = 0; i < 5; i++)
+	{
+		arg[i] = ebp[i+2];
+	}
+	cprintf("Backtrace:\n");
+	while(ebp != 0)//because at first movw %0x0, %ebp
+	{
+	
+		cprintf("  ebp %08x  eip %08x  args %08x %08x %08x %08x %08x\n"
+			, ebp, eip, arg[0], arg[1], arg[2], arg[3], arg[4]);
+		if(!debuginfo_eip((uint32_t)eip, &info))
+		{
+			cprintf("  %s:%d: %.*s+%d\n"
+			,info.eip_file, info.eip_line, info.eip_fn_namelen,
+			 info.eip_fn_name, (uint32_t)eip - info.eip_fn_addr);
+		}
+
+		ebp = (uint32_t*) ebp[0];
+		eip = (uint32_t*) ebp[1];
+		for(i = 0; i < 5; i++)
+		{
+			arg[i] = ebp[i+2];
+		}
+	}	
+	return 0;
+}
+
+extern pte_t *kern_pgdir;
+int
+mon_showmappings(int argc, char **argv, struct Trapframe *tf)
+{
+	if (argc != 3) {
+		cprintf ("Please input with right format\n");
+		return 0;
+	}
+	uint32_t lva = strtol (argv[1], 0, 0);
+	uint32_t hva = strtol (argv[2], 0, 0);
+
+	pte_t *tempte;
+	for(; lva < hva; lva += PGSIZE)
+	{
+		tempte = pgdir_walk (kern_pgdir, (void*) lva, 0);
+		cprintf ("%08x - %08x", lva, ROUNDUP(lva ,PGSIZE));
+		if (tempte == NULL || !(*tempte & PTE_P))
+			cprintf ("have not mapped!\n");
+		else
+		{
+			cprintf (" physical address:%08x ", PTE_ADDR (*tempte));
+			if (*tempte & PTE_U)
+				cprintf (" user space: ");
+			else	
+				cprintf (" kernel space: ");
+			if (*tempte & PTE_W)	
+				cprintf ("writeable\n");
+			else	
+				cprintf ("readonly\n");
+		}
+	}
+	return 0;
+}
+
+int
+mon_setmappings (int argc, char **argv, struct Trapframe *tf)
+{
+	if (argc != 5) {
+		cprintf ("HELP:setmappings [VIRTUAL_ADDR] [SIZE] [PHYSICAL_ADDR] [PERMISSION]\n");
+		cprintf ("EXAMPLE:setmappings 0x0 4096 0x0 r\n");
+		cprintf ("Both virtual address and physical address must bealigned in 4KB\n");
+		cprintf ("Permission is 'w' or 'r'\n");
+		cprintf ("w stands for writeable, r for readonly\n");
+		return 0;
+	}
+	
+	uint32_t va = strtol (argv[1], 0, 0);
+	uint32_t pa = strtol (argv[3], 0, 0);
+	uint32_t perm = 0;
+	uint32_t size = strtol (argv[2], 0, 0);
+	//check the validation
+	if (va != ROUNDUP (va, PGSIZE) ||pa != ROUNDUP (pa, PGSIZE) || va + size> 0xffffffff)
+	{
+		cprintf ("please input in right format\n");
+		return 0;
+	}
+	//change the permission
+	if (argv[4][0] == 'w')
+	{
+		perm |= PTE_W;
+	}
+	//set_region
+	int i;
+	for(i = 0; i < size; i += PGSIZE)
+	{	*pgdir_walk( kern_pgdir, (void*)va, 1)  = PTE_ADDR(pa) | perm | PTE_P;
+		pa += PGSIZE;
+		va += PGSIZE;
+	}
+	
+	return 0;
+}
+
+
+int
+mon_dump(int argc, char **argv, struct Trapframe *tf)
+{
+	if (argc != 4) {
+		cprintf ("dumpmem [ADDR_TYPE] [LOWER_ADDR] [HIGHER_ADDR]\n");
+		cprintf ("EXAMPLE: dumpmem p 0x00200000 0x00201000\n");
+		cprintf ("Address must be aligned in 4B\n");
+		cprintf ("Address type can only be v or p\n");
+		return 0;
+	}
+	uint32_t lva = strtol (argv[2], 0, 0);
+	uint32_t hva = strtol (argv[3], 0, 0);
+	if (lva != ROUNDUP (lva, 4) || hva != ROUNDUP (hva, 4) || lva > hva ||(argv[1][0] != 'v' && argv[1][0] != 'p'))
+	{
+		cprintf ("please input right format\n");
+		return 0;
+	}
+	//change the physical address into virtual address first.
+	if (argv[1][0] == 'p')
+	{
+		lva += KERNBASE;
+		hva += KERNBASE;
+	}
+	
+	for(; lva < hva;lva += 4)
+	{
+		cprintf ("%08x: ", lva);
+		cprintf ("%08x ", *((uint32_t*) lva));
+		cprintf ("\n");
+	}
+	return 0;
+}
+
+int
+mon_checkpermission(int argc, char **argv, struct Trapframe *tf)
+{
+	if (argc != 2) {
+	   	cprintf ("checkpermission [ADDRESS]\n");
+		cprintf ("EXAMPLE: checkpermission 0x00201000\n");
+		return 0;
+	}
+	uint32_t va = strtol (argv[1], 0, 0);
+	pte_t *tempte = pgdir_walk (kern_pgdir, (void*) va, 0);
+	if (tempte == NULL || !(*tempte & PTE_P))
+		cprintf ("have not mapped!\n");
+	else if(*tempte & PTE_W)
+		cprintf ("the address is writeable\n");
+	else
+		cprintf ("the address is readonly\n");
+	return 0;
+}
+/***** Kernel monitor command interpreter *****/
+
+#define WHITESPACE "\t\r\n "
+#define MAXARGS 16
+
+static int
+runcmd(char *buf, struct Trapframe *tf)
+{
+	int argc;
+	char *argv[MAXARGS];
+	int i;
+
+	// Parse the command buffer into whitespace-separated arguments
+	argc = 0;
+	argv[argc] = 0;
+	while (1) {
+		// gobble whitespace
+		while (*buf && strchr(WHITESPACE, *buf))
+			*buf++ = 0;
+		if (*buf == 0)
+			break;
+
+		// save and scan past next arg
+		if (argc == MAXARGS-1) {
+			cprintf("Too many arguments (max %d)\n", MAXARGS);
+			return 0;
+		}
+		argv[argc++] = buf;
+		while (*buf && !strchr(WHITESPACE, *buf))
+			buf++;
+	}
+	argv[argc] = 0;
+
+	// Lookup and invoke the command
+	if (argc == 0)
+		return 0;
+	for (i = 0; i < NCOMMANDS; i++) {
+		if (strcmp(argv[0], commands[i].name) == 0)
+			return commands[i].func(argc, argv, tf);
+	}
+	cprintf("Unknown command '%s'\n", argv[0]);
+	return 0;
+}
+
+void
+monitor(struct Trapframe *tf)
+{
+	char *buf;
+
+	cprintf("Welcome to the JOS kernel monitor!\n");
+	cprintf("Type 'help' for a list of commands.\n");
+	
+	while (1) {
+		buf = readline("K> ");
+		if (buf != NULL)
+			if (runcmd(buf, tf) < 0)
+				break;
+	}
+}
