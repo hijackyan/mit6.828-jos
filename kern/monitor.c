@@ -10,6 +10,7 @@
 #include <kern/console.h>
 #include <kern/monitor.h>
 #include <kern/kdebug.h>
+#include <kern/pmap.h>
 
 #define CMDBUF_SIZE	80	// enough for one VGA text line
 
@@ -24,6 +25,11 @@ struct Command {
 static struct Command commands[] = {
 	{ "help", "Display this list of commands", mon_help },
 	{ "kerninfo", "Display information about the kernel", mon_kerninfo },
+	{ "backtrace", "Display backtrace", mon_backtrace },
+	{ "showmappings", "Display the mapping", mon_showmappings },
+	{ "mon_setmappings", "Set the mapping", mon_setmappings },
+	{ "dump", "Dump the address", mon_dump },
+	{ "checkpermission", "Check the permission", mon_checkpermission },
 };
 #define NCOMMANDS (sizeof(commands)/sizeof(commands[0]))
 
@@ -54,6 +60,7 @@ mon_kerninfo(int argc, char **argv, struct Trapframe *tf)
 		ROUNDUP(end - entry, 1024) / 1024);
 	return 0;
 }
+
 
 int
 mon_backtrace(int argc, char **argv, struct Trapframe *tf)
@@ -91,8 +98,130 @@ mon_backtrace(int argc, char **argv, struct Trapframe *tf)
 	return 0;
 }
 
+extern pte_t *kern_pgdir;
+int
+mon_showmappings(int argc, char **argv, struct Trapframe *tf)
+{
+	if (argc != 3) {
+		cprintf ("Please input with right format\n");
+		return 0;
+	}
+	uint32_t lva = strtol (argv[1], 0, 0);
+	uint32_t hva = strtol (argv[2], 0, 0);
+
+	pte_t *tempte;
+	for(; lva < hva; lva += PGSIZE)
+	{
+		tempte = pgdir_walk (kern_pgdir, (void*) lva, 0);
+		cprintf ("%08x - %08x", lva, ROUNDUP(lva ,PGSIZE));
+		if (tempte == NULL || !(*tempte & PTE_P))
+			cprintf ("have not mapped!\n");
+		else
+		{
+			cprintf (" physical address:%08x ", PTE_ADDR (*tempte));
+			if (*tempte & PTE_U)
+				cprintf (" user space: ");
+			else	
+				cprintf (" kernel space: ");
+			if (*tempte & PTE_W)	
+				cprintf ("writeable\n");
+			else	
+				cprintf ("readonly\n");
+		}
+	}
+	return 0;
+}
+
+int
+mon_setmappings (int argc, char **argv, struct Trapframe *tf)
+{
+	if (argc != 5) {
+		cprintf ("HELP:setmappings [VIRTUAL_ADDR] [SIZE] [PHYSICAL_ADDR] [PERMISSION]\n");
+		cprintf ("EXAMPLE:setmappings 0x0 4096 0x0 r\n");
+		cprintf ("Both virtual address and physical address must bealigned in 4KB\n");
+		cprintf ("Permission is 'w' or 'r'\n");
+		cprintf ("w stands for writeable, r for readonly\n");
+		return 0;
+	}
+	
+	uint32_t va = strtol (argv[1], 0, 0);
+	uint32_t pa = strtol (argv[3], 0, 0);
+	uint32_t perm = 0;
+	uint32_t size = strtol (argv[2], 0, 0);
+	//check the validation
+	if (va != ROUNDUP (va, PGSIZE) ||pa != ROUNDUP (pa, PGSIZE) || va + size> 0xffffffff)
+	{
+		cprintf ("please input in right format\n");
+		return 0;
+	}
+	//change the permission
+	if (argv[4][0] == 'w')
+	{
+		perm |= PTE_W;
+	}
+	//set_region
+	int i;
+	for(i = 0; i < size; i += PGSIZE)
+	{	*pgdir_walk( kern_pgdir, (void*)va, 1)  = PTE_ADDR(pa) | perm | PTE_P;
+		pa += PGSIZE;
+		va += PGSIZE;
+	}
+	
+	return 0;
+}
 
 
+int
+mon_dump(int argc, char **argv, struct Trapframe *tf)
+{
+	if (argc != 4) {
+		cprintf ("dumpmem [ADDR_TYPE] [LOWER_ADDR] [HIGHER_ADDR]\n");
+		cprintf ("EXAMPLE: dumpmem p 0x00200000 0x00201000\n");
+		cprintf ("Address must be aligned in 4B\n");
+		cprintf ("Address type can only be v or p\n");
+		return 0;
+	}
+	uint32_t lva = strtol (argv[2], 0, 0);
+	uint32_t hva = strtol (argv[3], 0, 0);
+	if (lva != ROUNDUP (lva, 4) || hva != ROUNDUP (hva, 4) || lva > hva ||(argv[1][0] != 'v' && argv[1][0] != 'p'))
+	{
+		cprintf ("please input right format\n");
+		return 0;
+	}
+	//change the physical address into virtual address first.
+	if (argv[1][0] == 'p')
+	{
+		lva += KERNBASE;
+		hva += KERNBASE;
+	}
+	
+	for(; lva < hva;lva += 4)
+	{
+		cprintf ("%08x: ", lva);
+		cprintf ("%08x ", *((uint32_t*) lva));
+		cprintf ("\n");
+	}
+	return 0;
+}
+
+int
+mon_checkpermission(int argc, char **argv, struct Trapframe *tf)
+{
+	if (argc != 2) {
+	   	cprintf ("checkpermission [ADDRESS]\n");
+		cprintf ("EXAMPLE: checkpermission 0x00201000\n");
+		return 0;
+	}
+	uint32_t va = strtol (argv[1], 0, 0);
+	pte_t *tempte = pgdir_walk (kern_pgdir, (void*) va, 0);
+	if (tempte == NULL || !(*tempte & PTE_P))
+		cprintf ("have not mapped!\n");
+	else if(*tempte & PTE_W)
+		cprintf ("the address is writeable\n");
+	else
+		cprintf ("the address is readonly\n");
+	return 0;
+}
 /***** Kernel monitor command interpreter *****/
 
 #define WHITESPACE "\t\r\n "
