@@ -419,6 +419,7 @@ boot_map_region(pde_t *pgdir, uintptr_t va, size_t size, physaddr_t pa, int perm
 	}	
 }
 
+//challenge 1 
 static void
 boot_map_KERNBASE(pde_t *pgdir, uintptr_t va, size_t size, physaddr_t pa, int perm)
 {
