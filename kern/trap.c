@@ -65,6 +65,47 @@ trap_init(void)
 	extern struct Segdesc gdt[];
 
 	// LAB 3: Your code here.
+	extern void routine_DIVIDE ();
+	extern void routine_DEBUG ();
+	extern void routine_NMI ();
+	extern void routine_BRKPT ();
+	extern void routine_OFLOW ();
+	extern void routine_BOUND ();
+	extern void routine_ILLOP ();
+	extern void routine_DEVICE ();
+	extern void routine_DBLFLT ();
+	extern void routine_TSS ();
+	extern void routine_SEGNP ();
+	extern void routine_STACK ();
+	extern void routine_GPFLT ();
+	extern void routine_PGFLT ();
+	extern void routine_FPERR ();
+	extern void routine_ALIGN ();
+	extern void routine_MCHK ();
+	extern void routine_SIMDERR ();
+	extern void routine_SYSCALL ();
+
+	SETGATE (idt[T_DIVIDE], 0, GD_KT, routine_DIVIDE, 0);
+	SETGATE (idt[T_DEBUG], 1, GD_KT, routine_DEBUG, 3);
+	SETGATE (idt[T_NMI], 0, GD_KT, routine_NMI, 0);
+	// break point needs no kernel mode privilege
+	SETGATE (idt[T_BRKPT], 0, GD_KT, routine_BRKPT, 3);
+	SETGATE (idt[T_OFLOW], 0, GD_KT, routine_OFLOW, 0);
+	SETGATE (idt[T_BOUND], 0, GD_KT, routine_BOUND, 0);
+	SETGATE (idt[T_ILLOP], 0, GD_KT, routine_ILLOP, 0);
+	SETGATE (idt[T_DEVICE], 0, GD_KT, routine_DEVICE, 0);
+	SETGATE (idt[T_DBLFLT], 0, GD_KT, routine_DBLFLT, 0);
+	SETGATE (idt[T_TSS], 0, GD_KT, routine_TSS, 0);
+	SETGATE (idt[T_SEGNP], 0, GD_KT, routine_SEGNP, 0);
+	SETGATE (idt[T_STACK], 0, GD_KT, routine_STACK, 0);
+	SETGATE (idt[T_GPFLT], 0, GD_KT, routine_GPFLT, 0);
+	SETGATE (idt[T_PGFLT], 0, GD_KT, routine_PGFLT, 0);
+	SETGATE (idt[T_FPERR], 0, GD_KT, routine_FPERR, 0);
+	SETGATE (idt[T_ALIGN], 0, GD_KT, routine_ALIGN, 0);
+	SETGATE (idt[T_MCHK], 0, GD_KT, routine_MCHK, 0);
+	SETGATE (idt[T_SIMDERR], 0, GD_KT, routine_SIMDERR, 0);
+	//syscall needs no kernel mode privilege
+	SETGATE (idt[T_SYSCALL], 1, GD_KT, routine_SYSCALL, 3);
 
 	// Per-CPU setup 
 	trap_init_percpu();
@@ -143,7 +184,31 @@ trap_dispatch(struct Trapframe *tf)
 {
 	// Handle processor exceptions.
 	// LAB 3: Your code here.
-
+	if(tf -> tf_trapno == T_PGFLT)
+	{
+		page_fault_handler(tf);
+		return;
+		
+	}
+	if (tf->tf_trapno == T_BRKPT || tf->tf_trapno == T_DEBUG)
+	{
+		monitor (tf);
+		return;
+	}
+	if(tf -> tf_trapno == T_SYSCALL)
+	{	
+		//cprintf("%d\n",tf -> tf_trapno);
+		tf->tf_regs.reg_eax = syscall (
+			tf->tf_regs.reg_eax,
+			tf->tf_regs.reg_edx,
+			tf->tf_regs.reg_ecx,
+			tf->tf_regs.reg_ebx,
+			tf->tf_regs.reg_edi,
+			tf->tf_regs.reg_esi);
+		if (tf->tf_regs.reg_eax < 0)
+			panic ("trap_dispatch: The System Call number is invalid");
+		return;	
+	}
 	// Unexpected trap: The user process or the kernel has a bug.
 	print_trapframe(tf);
 	if (tf->tf_cs == GD_KT)
@@ -157,6 +222,7 @@ trap_dispatch(struct Trapframe *tf)
 void
 trap(struct Trapframe *tf)
 {
+
 	// The environment may have set DF and some versions
 	// of GCC rely on DF being clear
 	asm volatile("cld" ::: "cc");
@@ -167,11 +233,26 @@ trap(struct Trapframe *tf)
 	assert(!(read_eflags() & FL_IF));
 
 	cprintf("Incoming TRAP frame at %p\n", tf);
+	cprintf("privilige: %08x\n",tf->tf_cs);
 
 	if ((tf->tf_cs & 3) == 3) {
 		// Trapped from user mode.
 		assert(curenv);
+		//cprintf("Trapped from user mode\n");
+		//cprintf("curenv->env_tf.tf_eip in trap: %08x\n",curenv->env_tf.tf_eip);
+		//print_trapframe(&curenv->env_tf);
+		//cprintf("now_cr3: %08x\n",rcr3());
+		
+		//cprintf("curenv_cr3: %08x\n",curenv->env_pgdir);
 
+		//cprintf("I read %08x from location 0xf0100000! %08x\n",*(unsigned*)0xf0100000);
+		//为什么现在在内核 但是cr3 是用户态的 然后能输出内核态地址的东西？？  明白了现在是看cs的后两位
+		//为什么如果开放page fault给用户 用户就能自己分配空间了？
+		//kernel的cs存放在哪里？ 存放在TSS里
+		//tf_cs是何时压入? 在进入trapentry.s前
+		//int 中断 和 普通中断有何不同
+		
+		//print_trapframe(tf);
 		// Copy trap frame (which is currently on the stack)
 		// into 'curenv->env_tf', so that running the environment
 		// will restart at the trap point.
@@ -187,7 +268,7 @@ trap(struct Trapframe *tf)
 	// Dispatch based on what type of trap occurred
 	trap_dispatch(tf);
 
-	// Return to the current environment, which should be running.
+	// Return to the current environment, which should be running.!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 	assert(curenv && curenv->env_status == ENV_RUNNING);
 	env_run(curenv);
 }
@@ -204,6 +285,8 @@ page_fault_handler(struct Trapframe *tf)
 	// Handle kernel-mode page faults.
 
 	// LAB 3: Your code here.
+	if ((tf->tf_cs & 3) == 0)
+		panic ("page_fault_handler:kernel-mode page faults");
 
 	// We've already handled kernel-mode exceptions, so if we get here,
 	// the page fault happened in user mode.

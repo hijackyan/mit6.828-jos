@@ -46,10 +46,49 @@
 /*
  * Lab 3: Your code here for generating entry points for the different traps.
  */
+	//these do not need error code
+	TRAPHANDLER_NOEC(routine_DIVIDE, T_DIVIDE)
+	TRAPHANDLER_NOEC(routine_DEBUG, T_DEBUG)
+	TRAPHANDLER_NOEC(routine_NMI, T_NMI)
+	TRAPHANDLER_NOEC(routine_BRKPT, T_BRKPT)
+	TRAPHANDLER_NOEC(routine_OFLOW, T_OFLOW)
+	TRAPHANDLER_NOEC(routine_BOUND, T_BOUND)
+	TRAPHANDLER_NOEC(routine_ILLOP, T_ILLOP)
+	TRAPHANDLER_NOEC(routine_DEVICE, T_DEVICE)
 
+	TRAPHANDLER(routine_DBLFLT, T_DBLFLT)
+	TRAPHANDLER(routine_TSS, T_TSS)
+	TRAPHANDLER(routine_SEGNP, T_SEGNP)
+	TRAPHANDLER(routine_STACK, T_STACK)
+	TRAPHANDLER(routine_GPFLT, T_GPFLT)
+	TRAPHANDLER(routine_PGFLT, T_PGFLT)
+	TRAPHANDLER_NOEC(routine_FPERR, T_FPERR)
+	TRAPHANDLER(routine_ALIGN, T_ALIGN)
+	TRAPHANDLER_NOEC(routine_MCHK, T_MCHK)
+	TRAPHANDLER_NOEC(routine_SIMDERR, T_SIMDERR)
+	TRAPHANDLER_NOEC(routine_SYSCALL, T_SYSCALL)
 
 
 /*
  * Lab 3: Your code here for _alltraps
- */
+*/
+_alltraps:	
+	//the push sequence just reverse the sequence in Trapframe
+	// push values to make the stack look like a struct Trapframe
+	pushw $0x0
+	pushw %ds
+	pushw $0x0
+	pushw %es
+	pushal
+
+	// load GD_KD into %ds and %es
+	movl $GD_KD, %eax
+	movw %ax, %ds
+	movw %ax, %es
+	//pushl %esp to pass a pointer to the Trapframe as an argument to trap()
+	//point to the lower point of Trapframe
+	pushl %esp
+	//   call trap (can trap ever return?) 
+	call trap
+
 
