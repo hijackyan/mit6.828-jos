@@ -86,7 +86,7 @@ trap_init(void)
 	extern void routine_SYSCALL ();
 
 	SETGATE (idt[T_DIVIDE], 0, GD_KT, routine_DIVIDE, 0);
-	SETGATE (idt[T_DEBUG], 1, GD_KT, routine_DEBUG, 3);
+	SETGATE (idt[T_DEBUG], 0, GD_KT, routine_DEBUG, 3);
 	SETGATE (idt[T_NMI], 0, GD_KT, routine_NMI, 0);
 	// break point needs no kernel mode privilege
 	SETGATE (idt[T_BRKPT], 0, GD_KT, routine_BRKPT, 3);
@@ -225,6 +225,7 @@ trap(struct Trapframe *tf)
 
 	// The environment may have set DF and some versions
 	// of GCC rely on DF being clear
+
 	asm volatile("cld" ::: "cc");
 
 	// Check that interrupts are disabled.  If this assertion

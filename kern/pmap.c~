@@ -159,7 +159,9 @@ mem_init(void)
 	// Make 'envs' point to an array of size 'NENV' of 'struct Env'.
 	// LAB 3: Your code here.
 	envs = boot_alloc(NENV*sizeof(struct Env));
+	cprintf("size: %d\n",NENV);
 	
+	cprintf("size: %d",sizeof(struct Env));
 	//////////////////////////////////////////////////////////////////////
 	// Now that we've allocated the initial kernel data structures, we set
 	// up the list of free physical pages. Once we've done so, all further
@@ -593,7 +595,7 @@ user_mem_check(struct Env *env, const void *va, size_t len, int perm)
 		}
 		tmpPte = pgdir_walk(env->env_pgdir,( const void *) i, 0);
 		if( tmpPte == NULL || ( (*tmpPte)&perm ) != perm )
-		{	cprintf("user_mem_check_addr:%08x\n",i);
+		{	
 			user_mem_check_addr = i;
 			return -E_FAULT;
 		}
