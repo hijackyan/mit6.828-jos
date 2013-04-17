@@ -308,7 +308,7 @@ trap(struct Trapframe *tf)
 			curenv = NULL;
 			sched_yield();
 		}
-		//cprintf("I read %08x from location 0Xf0100000!\n", *(unsigned*)0Xf0100000);
+		cprintf("I read %08x from location 0Xf0100000!\n", *(unsigned*)0Xf0100000);
 		//原来内核的页目录地址被扔了 为啥没有关系呢？
 		//为什么现在在内核 但是cr3 是用户态的 然后能输出内核态地址的东西？
 		//int 中断 和 普通中断有何不同?

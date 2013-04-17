@@ -273,6 +273,7 @@ mem_init_mp(void)
 	//
 	// LAB 4: Your code here:
 	uintptr_t i;
+	//<= or < ???
 	for( i = 0; i < NCPU; i++)
 	{
 		uintptr_t kstacktop_i = KSTACKTOP - i * (KSTKSIZE + KSTKGAP);

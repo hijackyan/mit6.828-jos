@@ -69,7 +69,7 @@ mon_kerninfo(int argc, char **argv, struct Trapframe *tf)
 	extern struct Pseudodesc gdt_pd;
 	int i = 0;	
 	for(i = 0;  i< 30;i+=1)
-	cprintf("GDT: %x\n",gdt[i]);
+	cprintf("GDT: %08x\n",gdt[i]);
 	cprintf("GDT_pd: %ld\n",gdt_pd);
 	
 	return 0;
