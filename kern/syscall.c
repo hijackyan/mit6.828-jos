@@ -141,7 +141,12 @@ static int
 sys_env_set_pgfault_upcall(envid_t envid, void *func)
 {
 	// LAB 4: Your code here.
-	panic("sys_env_set_pgfault_upcall not implemented");
+	struct Env *e;
+	if (envid2env (envid, &e, 1) < 0)
+		return -E_BAD_ENV;
+	e->env_pgfault_upcall = func;
+	return 0;
+
 }
 
 // Allocate a page of memory and map it at 'va' with permission
@@ -333,7 +338,7 @@ sys_ipc_recv(void *dstva)
 int32_t
 syscall(uint32_t syscallno, uint32_t a1, uint32_t a2, uint32_t a3, uint32_t a4, uint32_t a5)
 {
-	//cprintf("syscallno: %d\n",syscallno);
+	cprintf("syscallno: %d\n",syscallno);
 	// Call the function corresponding to the 'syscallno' parameter.
 	// Return any appropriate return value.
 	// LAB 3: Your code here.

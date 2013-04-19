@@ -57,7 +57,10 @@ dumbfork(void)
 		// The copied value of the global variable 'thisenv'
 		// is no longer valid (it refers to the parent!).
 		// Fix it and return 0.
+		cprintf("thisenv:%08x\n",thisenv);		
 		thisenv = &envs[ENVX(sys_getenvid())];
+		cprintf("thisenv2:%08x\n",thisenv);		
+	
 		return 0;
 	}
 
