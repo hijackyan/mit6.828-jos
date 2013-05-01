@@ -674,7 +674,8 @@ user_mem_check(struct Env *env, const void *va, size_t len, int perm)
 			return -E_FAULT;
 		}
 		tmpPte = pgdir_walk(env->env_pgdir,( const void *) i, 0);
-		if( tmpPte == NULL || ( (*tmpPte)&perm ) != perm )
+		//cprintf("va:%08x\n",va);
+		if( tmpPte == NULL || ( (*tmpPte) & perm ) != perm )
 		{	
 			user_mem_check_addr = i;
 			return -E_FAULT;

@@ -128,8 +128,9 @@ env_init(void)
 		envs[i].env_status = ENV_FREE;
 		envs[i].env_link = &envs[i+1];
 	}
-	 envs[i].env_id = 0;
-	
+	envs[i].env_id = 0;
+	envs[i].env_status = ENV_FREE;
+	envs[i].env_link  = NULL;
 	// Per-CPU part of the initialization
 	env_init_percpu();
 }
@@ -168,7 +169,7 @@ env_init_percpu(void)
 static int
 env_setup_vm(struct Env *e)
 {
-	cprintf("env_setup_vm is called\n");
+	//cprintf("env_setup_vm is called\n");
 	
 	int i;
 	struct PageInfo *p = NULL;
@@ -201,9 +202,9 @@ env_setup_vm(struct Env *e)
 	//important!!! every + will add 4 bytes
 	memmove(e->env_pgdir + PDX(UTOP) , kern_pgdir + PDX(UTOP), PGSIZE -PDX(UTOP) * sizeof(pde_t));
 
-	cprintf("env_setup_vm:kern_pgdir : %08x\n",kern_pgdir);
-	cprintf("env_setup_vm:env_pgdir : %08x\n",e->env_pgdir);
-	cprintf("env_setup_vm:rcr3 : %08x\n",rcr3());
+	//cprintf("env_setup_vm:kern_pgdir : %08x\n",kern_pgdir);
+	//cprintf("env_setup_vm:env_pgdir : %08x\n",e->env_pgdir);
+	//cprintf("env_setup_vm:rcr3 : %08x\n",rcr3());
 	
 	
 	// UVPT maps the env's own page table read-only.
@@ -224,11 +225,11 @@ env_setup_vm(struct Env *e)
 int
 env_alloc(struct Env **newenv_store, envid_t parent_id)
 {
-	cprintf("env_alloc is called\n");
+	//cprintf("env_alloc is called\n");
 	int32_t generation;
 	int r;
 	struct Env *e;
-
+	
 	if (!(e = env_free_list))
 		return -E_NO_FREE_ENV;
 	// Allocate and set up the page directory for this environment.
@@ -270,6 +271,7 @@ env_alloc(struct Env **newenv_store, envid_t parent_id)
 
 	// Enable interrupts while in user mode.
 	// LAB 4: Your code here.
+	e->env_tf.tf_eflags |= FL_IF;
 
 	// Clear the page fault handler until user installs one.
 	e->env_pgfault_upcall = 0;
@@ -289,7 +291,7 @@ env_alloc(struct Env **newenv_store, envid_t parent_id)
 // Allocate len bytes of physical memory for environment env,
 // and map it at virtual address va in the environment's address space.
 // Does not zero or otherwise initialize the mapped pages in any way.
-// Pages should be writable by user and kernel.
+// Pages should be writable by user and kernel.m
 // Panic if any allocation attempt fails.
 //
 static void
@@ -421,7 +423,7 @@ load_icode(struct Env *e, uint8_t *binary, size_t size)
 void
 env_create(uint8_t *binary, size_t size, enum EnvType type)
 {
-	cprintf("env_create is called\n");
+	//cprintf("env_create is called\n");
 	
 	// LAB 3: Your code here.
 	struct Env * newenv_store;
@@ -559,7 +561,9 @@ env_run(struct Env *e)
 	//	e->env_tf to sensible values.
 
 	// LAB 3: Your code here.
-	//cprintf("env_run is called\n");
+	//cprintf("env_run is called:%d\n",e-envs);
+	//cprintf("env_run is called: eip:%08x\n",e->env_tf.tf_eip);
+	
 	if(curenv != e)
 	{
 		if(curenv != NULL && curenv -> env_status == ENV_RUNNING) 
