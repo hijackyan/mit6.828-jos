@@ -164,7 +164,8 @@ mpconfig(struct mp **pmp)
 
 void
 mp_init(void)
-{
+{	
+	cprintf("mp_init:\n");
 	struct mp *mp;
 	struct mpconf *conf;
 	struct mpproc *proc;

@@ -41,6 +41,7 @@ struct Dev devfile =
 	.dev_read =	devfile_read,
 	.dev_close =	devfile_flush,
 	.dev_stat =	devfile_stat,
+	.dev_write =	devfile_write,
 };
 
 // Open a file (or directory).
@@ -140,4 +141,27 @@ devfile_stat(struct Fd *fd, struct Stat *st)
 	return 0;
 }
 
+// Write at most 'n' bytes from 'buf' to 'fd' at the current seek position.
+//
+// Returns:
+//	 The number of bytes successfully written.
+//	 < 0 on error.
+static ssize_t
+devfile_write(struct Fd *fd, const void *buf, size_t n)
+{
+
+    	if (n > sizeof (fsipcbuf.write.req_buf))
+        	n = sizeof (fsipcbuf.write.req_buf);
+
+    	fsipcbuf.write.req_fileid = fd->fd_file.id;
+    	fsipcbuf.write.req_n = n;
+
+   	 memmove (fsipcbuf.write.req_buf, buf, n);
+
+   	 int r;
+    	if ((r = fsipc (FSREQ_WRITE, NULL)) < 0)
+        	return r;
+
+    	return r;
+}
 

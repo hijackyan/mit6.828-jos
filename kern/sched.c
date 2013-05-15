@@ -29,9 +29,34 @@ sched_yield(void)
 	// below to halt the cpu.
 
 	// LAB 4: Your code here.
-
-	// sched_halt never returns
-	sched_halt();
+	//cprintf("yield:begin\n");
+			
+	int i;
+	idle = curenv;
+	if(curenv == NULL)
+		idle = envs;
+	else
+		idle++;	
+	for(i = 1; i < NENV; idle++,i++)	
+	{	
+		if(idle >= envs + NENV)
+		{
+			idle = envs;
+		}
+		if(idle->env_status == ENV_RUNNABLE)
+		{
+			//cprintf("yield1:env:%d\n",idle - envs);
+			env_run(idle);
+			break;
+		}
+	}
+	if(i >= NENV && curenv != NULL && curenv->env_status == ENV_RUNNING)
+	{	
+		env_run(curenv);
+	}
+	else
+		// sched_halt never returns
+		sched_halt();
 }
 
 // Halt this CPU when there is nothing to do. Wait until the

@@ -95,8 +95,14 @@ file_get_block(struct File *f, uint32_t filebno, char **blk)
 
 	if ((r = file_block_walk(f, filebno, &ptr, 1)) < 0)
 		return r;
-	if (*ptr == 0) {
-		return -E_NOT_FOUND;
+	if (*ptr == 0)
+	{
+		if ((r = alloc_block ()) < 0)
+	            return -E_NO_DISK;
+
+        	*ptr = r;
+        	memset (diskaddr (r), 0, BLKSIZE);
+        	flush_block (diskaddr (r));
 	}
 	*blk = diskaddr(*ptr);
 	return 0;
@@ -201,7 +207,40 @@ walk_path(const char *path, struct File **pdir, struct File **pf, char *lastelem
 // --------------------------------------------------------------
 // File operations
 // --------------------------------------------------------------
+void
+file_flush(struct File *f)
+{
+	int i;
+	uint32_t *pdiskbno;
 
+	for (i = 0; i < (f->f_size + BLKSIZE - 1) / BLKSIZE; i++) {
+		if (file_block_walk(f, i, &pdiskbno, 0) < 0 ||
+		    pdiskbno == NULL || *pdiskbno == 0)
+			continue;
+		flush_block(diskaddr(*pdiskbno));
+	}
+	flush_block(f);
+	if (f->f_indirect)
+		flush_block(diskaddr(f->f_indirect));
+}
+// Create "path".  On success set *pf to point at the file and return 0.
+// On error return < 0.
+int
+file_create(const char *path, struct File **pf)
+{
+	char name[MAXNAMELEN];
+	int r;
+	struct File *dir, *f;
+
+	if ((r = walk_path(path, &dir, &f, name)) == 0)
+		return -E_FILE_EXISTS;
+	if (r != -E_NOT_FOUND || dir == 0)
+		return r;
+	strcpy(f->f_name, name);
+	*pf = f;
+	file_flush(dir);
+	return 0;
+}
 
 // Open "path".  On success set *pf to point at the file and return 0.
 // On error return < 0.
@@ -237,6 +276,106 @@ file_read(struct File *f, void *buf, size_t count, off_t offset)
 
 	return count;
 }
+int
+file_write(struct File *f, const void *buf, size_t count, off_t offset)
+{
+	int r, bn;
+	off_t pos;
+	char *blk;
 
+	// Extend file if necessary
+	if (offset + count > f->f_size)
+		if ((r = file_set_size(f, offset + count)) < 0)
+			return r;
+
+	for (pos = offset; pos < offset + count; ) {
+		if ((r = file_get_block(f, pos / BLKSIZE, &blk)) < 0)
+			return r;
+		bn = MIN(BLKSIZE - pos % BLKSIZE, offset + count - pos);
+		memmove(blk + pos % BLKSIZE, buf, bn);
+		pos += bn;
+		buf += bn;
+	}
+
+	return count;
+}
+// Remove a block from file f.  If it's not there, just silently succeed.
+// Returns 0 on success, < 0 on error.
+static int
+file_free_block(struct File *f, uint32_t filebno)
+{
+	int r;
+	uint32_t *ptr;
+
+	if ((r = file_block_walk(f, filebno, &ptr, 0)) < 0)
+		return r;
+	if (*ptr) {
+		*ptr = 0;
+	}
+	return 0;
+}
+
+// Remove any blocks currently used by file 'f',
+// but not necessary for a file of size 'newsize'.
+// For both the old and new sizes, figure out the number of blocks required,
+// and then clear the blocks from new_nblocks to old_nblocks.
+// If the new_nblocks is no more than NDIRECT, and the indirect block has
+// been allocated (f->f_indirect != 0), then free the indirect block too.
+// (Remember to clear the f->f_indirect pointer so you'll know
+// whether it's valid!)
+// Do not change f->f_size.
+
+static void
+file_truncate_blocks(struct File *f, off_t newsize)
+{
+	int r;
+	uint32_t bno, old_nblocks, new_nblocks;
+
+	old_nblocks = (f->f_size + BLKSIZE - 1) / BLKSIZE;
+	new_nblocks = (newsize + BLKSIZE - 1) / BLKSIZE;
+	for (bno = new_nblocks; bno < old_nblocks; bno++)
+		if ((r = file_free_block(f, bno)) < 0)
+			cprintf("warning: file_free_block: %e", r);
+
+	if (new_nblocks <= NDIRECT && f->f_indirect) {
+		f->f_indirect = 0;
+	}
+}
+
+// Set the size of file f, truncating or extending as necessary.
+int
+file_set_size(struct File *f, off_t newsize)
+{
+	if (f->f_size > newsize)
+		file_truncate_blocks(f, newsize);
+	f->f_size = newsize;
+	flush_block(f);
+	return 0;
+}
+// Check to see if the block bitmap indicates that block 'blockno' is free.
+// Return 1 if the block is free, 0 if not.
+bool
+block_is_free(uint32_t blockno)
+{
+	if (super == 0 || blockno >= super->s_nblocks)
+		return 0;
+	if (bitmap[blockno / 32] & (1 << (blockno % 32)))
+		return 1;
+	return 0;
+}
+
+int
+alloc_block(void)
+{
+	int blockno;
+	for (blockno = 0; blockno < super->s_nblocks; blockno++)
+		if (block_is_free (blockno))
+		{
+			bitmap[blockno/32] ^= 1 << (blockno%32);
+			flush_block (bitmap);
+			return blockno;
+		}
+	return -E_NO_DISK;
+}
 
 

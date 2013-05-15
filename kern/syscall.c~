@@ -415,7 +415,7 @@ sys_ipc_recv(void *dstva)
 	
 }
 //challenge2
-
+extern struct Env * env_free_list;
 static int
 sys_exec(envid_t envid)
 {

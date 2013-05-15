@@ -14,7 +14,6 @@ umain(int argc, char **argv)
 
 	// fork a child process
 	who = dumbfork();
-
 	// print a message and yield to the other a few times
 	for (i = 0; i < (who ? 10 : 20); i++) {
 		cprintf("%d: I am the %s!\n", i, who ? "parent" : "child");
@@ -58,13 +57,18 @@ dumbfork(void)
 		// The copied value of the global variable 'thisenv'
 		// is no longer valid (it refers to the parent!).
 		// Fix it and return 0.
+		cprintf("thisenv:%08x\n",thisenv);		
 		thisenv = &envs[ENVX(sys_getenvid())];
+		cprintf("thisenv2:%08x\n",thisenv);		
+	
 		return 0;
 	}
 
 	// We're the parent.
 	// Eagerly copy our entire address space into the child.
 	// This is NOT what you should do in your fork implementation.
+	//end define in user/user.ld
+	cprintf("endindumbfork:%08x\n",end);
 	for (addr = (uint8_t*) UTEXT; addr < end; addr += PGSIZE)
 		duppage(envid, addr);
 
@@ -74,7 +78,6 @@ dumbfork(void)
 	// Start the child environment running
 	if ((r = sys_env_set_status(envid, ENV_RUNNABLE)) < 0)
 		panic("sys_env_set_status: %e", r);
-
 	return envid;
 }
 
