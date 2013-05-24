@@ -52,7 +52,8 @@ i386_init(void)
 
 	// Lab 4 multitasking initialization functions
 	pic_init();
-
+	//initial the timer
+	time_init();
 	// Acquire the big kernel lock before waking up APs
 	// Your code here:
 	lock_kernel();
@@ -181,3 +182,4 @@ _warn(const char *file, int line, const char *fmt,...)
 	cprintf("\n");
 	va_end(ap);
 }
+

@@ -122,3 +122,15 @@ sys_exec(envid_t envid)
 {
 	return syscall(SYS_exec, 1, (uint32_t)envid, 0, 0, 0, 0);
 }
+
+int
+sys_time()
+{
+	return syscall(SYS_time, 0, 0, 0, 0, 0, 0);
+}
+
+int
+sys_reboot()
+{
+	return syscall(SYS_reboot, 1, 0, 0, 0, 0, 0);
+}

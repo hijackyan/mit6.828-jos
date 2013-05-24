@@ -18,6 +18,8 @@ enum {
 	SYS_ipc_try_send,
 	SYS_ipc_recv,
 	SYS_exec,
+	SYS_time,
+	SYS_reboot,
 	NSYSCALLS
 };
 

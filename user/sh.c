@@ -257,6 +257,8 @@ usage(void)
 void
 umain(int argc, char **argv)
 {
+	cprintf("Welcome to hijackyan's JOS\n");
+		
 	int r, interactive, echocmds;
 	struct Argstate args;
 
@@ -291,7 +293,6 @@ umain(int argc, char **argv)
 
 	while (1) {
 		char *buf;
-
 		buf = readline(interactive ? "$ " : NULL);
 		if (buf == NULL) {
 			if (debug)

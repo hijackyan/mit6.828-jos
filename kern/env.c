@@ -18,6 +18,7 @@
 struct Env *envs = NULL;		// All environments
 static struct Env *env_free_list;	// Free environment list
 					// (linked by Env->env_link)
+unsigned ticks;
 
 #define ENVGENSHIFT	12		// >= LOGNENV
 
@@ -598,3 +599,34 @@ env_free_simple(struct Env *e)
 	env_free_list = e;
 }
 
+
+void
+time_init() {
+	ticks = 0;
+}
+
+// this is called once per timer interupt; a timer interupt fires 100 times a
+// second
+void
+time_tick() {
+	if (ticks == ~0)
+		panic("time_tick: time overflowed");
+	ticks++;
+}
+
+unsigned
+time_msec() {
+	return ticks;
+}
+
+void
+reboot()
+{
+	//when the keyboard is free
+	uint8_t good = 0x02;
+	while ((good & 0x02) != 0)
+		good = inb(0x64);
+	//0x64端口是i8042键盘控制器的控制端口，0xfe命令字的意思是将P32-P21三个针脚拉为低电平，持续6usec。这段代码的实际效果就相当于你按下机箱上的 RESET 键。
+	outb(0x64, 0xFE);
+	
+}

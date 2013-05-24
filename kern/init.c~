@@ -52,7 +52,8 @@ i386_init(void)
 
 	// Lab 4 multitasking initialization functions
 	pic_init();
-
+	//initial the timer
+	time_init();
 	// Acquire the big kernel lock before waking up APs
 	// Your code here:
 	lock_kernel();
@@ -180,4 +181,25 @@ _warn(const char *file, int line, const char *fmt,...)
 	vcprintf(fmt, ap);
 	cprintf("\n");
 	va_end(ap);
+}
+
+unsigned ticks;
+
+void
+time_init() {
+	ticks = 0;
+}
+
+// this is called once per timer interupt; a timer interupt fires 100 times a
+// second
+void
+time_tick() {
+	if (ticks == ~0)
+		panic("time_tick: time overflowed");
+	ticks++;
+}
+
+unsigned
+time_msec() {
+	return ticks * 10;
 }

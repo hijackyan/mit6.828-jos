@@ -415,7 +415,7 @@ sys_ipc_recv(void *dstva)
 	
 }
 //challenge2
-extern struct Env * env_free_list;
+
 static int
 sys_exec(envid_t envid)
 {
@@ -436,6 +436,20 @@ sys_exec(envid_t envid)
 	env_free_simple(src_env);
 	return 0;
 }
+
+static int
+sys_time()
+{
+	return (int) time_msec();
+}
+
+static int
+sys_reboot()
+{
+	reboot();
+	return 0;
+}
+
 // Dispatches to the correct kernel function, passing the arguments.env_create is called
 int32_t
 syscall(uint32_t syscallno, uint32_t a1, uint32_t a2, uint32_t a3, uint32_t a4, uint32_t a5)
@@ -477,6 +491,10 @@ syscall(uint32_t syscallno, uint32_t a1, uint32_t a2, uint32_t a3, uint32_t a4, 
 		return sys_env_set_trapframe((envid_t)a1, (struct Trapframe *)a2);
 	case SYS_exec:
 		return sys_exec((envid_t)a1);
+	case SYS_time:
+		return sys_time();
+	case SYS_reboot:
+		return reboot();
 	dafault: return -E_INVAL;
 	}	
 	panic("syscall not implemented");
