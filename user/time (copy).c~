@@ -1,0 +1,9 @@
+//show the time
+#include <inc/lib.h>
+
+void
+umain(int argc, char **argv)
+{
+	cprintf("Reboot\n");
+	sys_reboot();
+}
